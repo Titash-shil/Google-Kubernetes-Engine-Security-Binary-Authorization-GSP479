@@ -13,11 +13,11 @@
 export ZONE=
 ```
 ```
-curl -LO raw.githubusercontent.com/QUICK-GCP-LAB/2-Minutes-Labs-Solutions/main/Google%20Kubernetes%20Engine%20Security%20Binary%20Authorization/gsp479.sh
+curl -LO raw.githubusercontent.com/Titash-shil/Google-Kubernetes-Engine-Security-Binary-Authorization-GSP479/refs/heads/main/qwiklab_explorers_gsp479.sh
 
-sudo chmod +x gsp479.sh
+sudo chmod +x qwiklab_explorers_gsp479.sh
 
-./gsp479.sh
+./qwiklab_explorers_gsp479.sh
 ```
 
 ---
