@@ -1,3 +1,30 @@
+#!/bin/bash
+# Define color variables
+
+BLACK=`tput setaf 0`
+RED=`tput setaf 1`
+GREEN=`tput setaf 2`
+YELLOW=`tput setaf 3`
+BLUE=`tput setaf 4`
+MAGENTA=`tput setaf 5`
+CYAN=`tput setaf 6`
+WHITE=`tput setaf 7`
+
+BG_BLACK=`tput setab 0`
+BG_RED=`tput setab 1`
+BG_GREEN=`tput setab 2`
+BG_YELLOW=`tput setab 3`
+BG_BLUE=`tput setab 4`
+BG_MAGENTA=`tput setab 5`
+BG_CYAN=`tput setab 6`
+BG_WHITE=`tput setab 7`
+
+BOLD=`tput bold`
+RESET=`tput sgr0`
+#----------------------------------------------------start--------------------------------------------------#
+
+echo "${WHITE}${BOLD}Starting${RESET}" "${BLUE}${BOLD}Execution${RESET}"
+
 export REGION="${ZONE%-*}"
 
 gcloud services enable compute.googleapis.com 
@@ -46,6 +73,92 @@ docker pull gcr.io/google-containers/nginx:latest
 gcloud auth configure-docker --quiet
 
 PROJECT_ID="$(gcloud config get-value project)"
+
+docker tag gcr.io/google-containers/nginx "gcr.io/${PROJECT_ID}/nginx:latest"
+docker push "gcr.io/${PROJECT_ID}/nginx:latest"
+
+gcloud container images list-tags "gcr.io/${PROJECT_ID}/nginx"
+
+cat << EOF | kubectl create -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: "gcr.io/${PROJECT_ID}/nginx:latest"
+    ports:
+    - containerPort: 80
+EOF
+
+kubectl get pods
+
+kubectl delete pod nginx
+
+gcloud beta container binauthz policy export > policy.yaml
+
+cat > policy.yaml <<EOF_END
+defaultAdmissionRule:
+  enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+  evaluationMode: ALWAYS_DENY
+globalPolicyEvaluationMode: ENABLE
+clusterAdmissionRules:
+  $ZONE.my-cluster-1:
+    evaluationMode: ALWAYS_DENY
+    enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+name: projects/$DEVSHELL_PROJECT_ID/policy
+EOF_END
+
+gcloud beta container binauthz policy import policy.yaml
+
+cat << EOF | kubectl create -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: "gcr.io/${PROJECT_ID}/nginx:latest"
+    ports:
+    - containerPort: 80
+EOF
+
+# Filter logs by resource type Kubernetes Container and cluster name stackdriver-logging
+gcloud logging read "resource.type='k8s_cluster'  AND protoPayload.response.reason='VIOLATES_POLICY'" --project=$DEVSHELL_PROJECT_ID
+
+# Run a specific query
+gcloud logging read "resource.type='k8s_cluster'  AND protoPayload.response.reason='VIOLATES_POLICY'" --project=$DEVSHELL_PROJECT_ID --format=json
+
+IMAGE_PATH=$(echo "gcr.io/${PROJECT_ID}/nginx*")
+
+cat > policy.yaml <<EOF_END
+defaultAdmissionRule:
+  enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+  evaluationMode: ALWAYS_DENY
+globalPolicyEvaluationMode: ENABLE
+clusterAdmissionRules:
+  $ZONE.my-cluster-1:
+    evaluationMode: ALWAYS_DENY
+    enforcementMode: ENFORCED_BLOCK_AND_AUDIT_LOG
+admissionWhitelistPatterns:
+- namePattern: "gcr.io/${DEVSHELL_PROJECT_ID}/nginx*"
+name: projects/$DEVSHELL_PROJECT_ID/policy
+
+EOF_END
+
+gcloud beta container binauthz policy import policy.yaml
+
+cat << EOF | kubectl create -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx
+spec:
+  containers:
+  - name: nginx
+    image: "gcr.io/${PROJECT_ID}/nginx:latest"
     ports:
     - containerPort: 80
 EOF
@@ -173,3 +286,7 @@ EOF
 echo "projects/${PROJECT_ID}/attestors/${ATTESTOR}" # Copy this output to your copy/paste buffer
 
 echo "https://console.cloud.google.com/security/binary-authorization/policy?referrer=search&project=$DEVSHELL_PROJECT_ID"
+
+echo "${BLUE}${BOLD}Congratulations${RESET}" "${GREEN}${BOLD}for${RESET}" "${RED}${BOLD}Completing the Lab !!!${RESET}"
+
+#-----------------------------------------------------end----------------------------------------------------------#
